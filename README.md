@@ -26,7 +26,7 @@ Touch panel ───┘           Pi 5 / mini PC                ├─ Smart lo
 | IR blaster for aircon / TV | — | Planned |
 
 ## Docs
-- [Modules to buy](docs/modules-to-buy.md): what to buy, what to check on each, ready-made Bluetooth products, starter cart
+- [Modules to buy](docs/modules-to-buy.md): **first order with PHP prices**, what to buy, what to check on each, ready-made Bluetooth products, starter cart
 - [Wiring](docs/wiring.md): cabinet lights, mains switch, smart lock, battery/UPS options
 - [How it works & phone apps](docs/how-it-works-and-phone-apps.md): Wi-Fi, Bluetooth, internet access, building your own app
 - [Smart lock](docs/smart-lock.md): architecture, actuator choice, security

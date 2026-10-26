@@ -2,6 +2,30 @@
 
 **Priority:** ⭐ = buy first (hub + first room + cabinet), ○ = later.
 
+Interactive version with checkboxes and running totals: [Smart Home Parts List](https://claude.ai/artifact/XhiMW8oXrsazpx7CHxxYWZ) (private to the owner).
+
+## 0. First order: start here
+
+Skip the generic ESP32 "37-in-1" starter kits. They're mostly beginner parts (DHT11, joystick, buzzer, 7-segment) this project doesn't use. This order covers what [`bench-test.yaml`](../esphome/bench-test.yaml) and [`kitchen-cabinet-lights.yaml`](../esphome/kitchen-cabinet-lights.yaml) need on the bench.
+
+| Part | Qty | Search on Shopee/Lazada | Check | Est. price (PHP) |
+|---|---|---|---|---|
+| ESP32 DevKit V1 | 2–3 | `ESP32 DevKit V1 CP2102 Type-C` | CP2102 or CH340 chip visible in the photos, USB-C | ₱500–1,100 (₱220–380 each) |
+| ESP32 expansion board | 1 | `ESP32 expansion board 38pin` | Pin count matches your DevKit (30 or 38). The DevKit is too wide for one breadboard. | ₱80–150 |
+| Breadboard + jumper wires | 1 set | `breadboard 830`, `jumper wire M-M M-F` | Both M-M and M-F jumpers | ₱150–270 |
+| Resistor + capacitor kits | 1 each | `resistor kit`, `electrolytic capacitor kit` | Includes 100 Ω, 10 kΩ, ≥100 µF | ₱200–400 |
+| MOSFET, breadboard-friendly | 2–4 | `IRLZ44N` or `D4184 MOSFET module` | Through-hole, logic-level. Keep the SMD AO3400 for your own PCB. | ₱80–250 |
+| 24 V CCT LED strip + 24 V adapter | 1 roll + 1 | `24V COB LED strip CCT`, `24V 2A adapter` | CRI ≥ 90. Use the wall adapter on the bench only; the permanent install gets a certified PSU. | ₱650–1,300 |
+| Buck converter | 1 | `MP1584 buck` | Set it to 5.0 V **before** connecting the ESP32 | ₱40–100 |
+| LD2410C + reed switches | 1 + 2 | `LD2410C`, `reed switch door sensor` | The **C** version of the LD2410. Reed gap ≥ 15 mm. | ₱330–650 |
+| **Total** | | | | **≈ ₱2,000–4,200** |
+
+Prices are rough estimates from typical Shopee/Lazada Philippines listings (October 2026), not live quotes. They vary by seller, and shipping is extra.
+
+**Saving tips:** buy from one or two stores so you pay shipping once, and use free-shipping vouchers. PH electronics shops that also sell on Shopee/Lazada (Makerlab Electronics, Circuitrocks, e-Gizmo) tend to have consistent stock. Buy the full 5 m strip roll: 1–2 m for the bench, the rest for the real cabinet.
+
+**Hold off until the cabinet light works:** the hub (learn Home Assistant in Docker on your laptop first), the touch panel, Sonoff Mini R4 relays (easier to find in PH than Shelly) and the lock parts.
+
 ## 1. Controllers (ESP32 boards)
 | | Module | Check before buying |
 |---|---|---|
