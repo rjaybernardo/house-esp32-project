@@ -1,0 +1,26 @@
+# Bench test: flash this onto any new ESP32 to confirm the board, USB port, Wi-Fi and
+# Home Assistant link work before installing it. Toggles the onboard LED (GPIO2 on DevKits).
+
+substitutions:
+  device_name: bench-test
+  friendly_name: Bench Test
+
+packages:
+  base: !include common/base.yaml
+
+output:
+  - platform: gpio
+    pin:
+      number: GPIO2
+      ignore_strapping_warning: true # onboard LED; nothing external on this pin
+    id: onboard_led_pin
+
+light:
+  - platform: binary
+    name: Onboard LED
+    output: onboard_led_pin
+
+sensor:
+  - platform: wifi_signal
+    name: WiFi Signal
+    update_interval: 30s

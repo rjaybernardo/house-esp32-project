@@ -1,0 +1,202 @@
+# Project: ESP32 smart lock
+# Unlock by fingerprint, keypad PIN, inside exit button, phone, or touchscreen (via Home Assistant).
+#
+# SECURITY: this ESP32 and the MOSFET go on the SECURE (inside) side of the door.
+# Only the keypad and fingerprint reader are outside, and they only carry signals.
+# If someone pries them off, there's no lock-coil wire to short.
+# See docs/smart-lock.md for wiring, actuator choice, and fail-safe vs fail-secure.
+
+substitutions:
+  device_name: front-door-lock
+  friendly_name: Front Door Lock
+  door_pin: !secret door_pin # keypad code, kept out of git
+  unlock_seconds: 5s # how long the solenoid/strike stays energized
+  max_wrong_codes: "5" # wrong PINs before the keypad locks out
+  lockout_time: 60s
+
+packages:
+  base: !include common/base.yaml
+
+# The encrypted API comes from base.yaml. These actions let you enroll and delete
+# fingerprints from Home Assistant (Developer tools → Actions).
+api:
+  actions:
+    - action: enroll_fingerprint
+      variables:
+        finger_id: int
+        num_scans: int
+      then:
+        - fingerprint_grow.enroll:
+            finger_id: !lambda "return finger_id;"
+            num_scans: !lambda "return num_scans;"
+    - action: cancel_enroll
+      then:
+        - fingerprint_grow.cancel_enroll:
+    - action: delete_fingerprint
+      variables:
+        finger_id: int
+      then:
+        - fingerprint_grow.delete:
+            finger_id: !lambda "return finger_id;"
+
+globals:
+  - id: wrong_codes
+    type: int
+    restore_value: false
+    initial_value: "0"
+
+# ---------- Actuator ----------
+# GPIO23 → gate of a logic-level N-MOSFET (AO3400 / IRLB8721) → low side of the 12 V solenoid or strike.
+# Flyback diode across the coil, 10k gate pull-down so it stays locked during boot.
+output:
+  - platform: gpio
+    pin: GPIO23
+    id: lock_coil
+
+  # Onboard LED used as a status light (also works as an indicator on the panel)
+  - platform: gpio
+    pin:
+      number: GPIO2
+      ignore_strapping_warning: true # onboard LED
+    id: status_led
+
+lock:
+  - platform: template
+    id: door_lock
+    name: Front Door
+    optimistic: true
+    lock_action:
+      - output.turn_off: lock_coil
+    # Solenoids aren't rated for continuous duty: pulse, then relock automatically
+    unlock_action:
+      - logger.log: "Door unlocked"
+      - output.turn_on: lock_coil
+      - output.turn_on: status_led
+      - delay: ${unlock_seconds}
+      - output.turn_off: lock_coil
+      - output.turn_off: status_led
+      - lock.template.publish:
+          id: door_lock
+          state: LOCKED
+
+script:
+  - id: keypad_lockout
+    mode: restart
+    then:
+      - logger.log: "Keypad locked out after too many wrong codes"
+      - delay: ${lockout_time}
+      - globals.set:
+          id: wrong_codes
+          value: "0"
+
+  - id: deny_feedback
+    then:
+      - repeat:
+          count: 3
+          then:
+            - output.turn_on: status_led
+            - delay: 100ms
+            - output.turn_off: status_led
+            - delay: 100ms
+
+# ---------- Sensors & inputs ----------
+binary_sensor:
+  # Reed switch on the door frame: tells you the door is actually closed, not just "lock commanded"
+  - platform: gpio
+    name: Door
+    device_class: door
+    pin:
+      number: GPIO22
+      mode: INPUT_PULLUP
+      inverted: true
+    filters:
+      - delayed_on_off: 100ms
+
+  # Inside "exit" button: always unlocks, no code needed
+  - platform: gpio
+    name: Exit Button
+    pin:
+      number: GPIO19
+      mode: INPUT_PULLUP
+      inverted: true
+    filters:
+      - delayed_on: 50ms
+    on_press:
+      - lock.unlock: door_lock
+
+  - platform: status
+    name: Online
+
+# ---------- Fingerprint reader (R503 / R307 "GROW" family) ----------
+uart:
+  rx_pin: GPIO16 # to reader TX
+  tx_pin: GPIO17 # to reader RX
+  baud_rate: 57600
+
+fingerprint_grow:
+  sensing_pin: GPIO4 # reader "WAKEUP/IRQ": goes low when a finger touches
+  on_finger_scan_matched:
+    - logger.log:
+        format: "Fingerprint matched: id %d (confidence %d)"
+        args: [finger_id, confidence]
+    - lock.unlock: door_lock
+  on_finger_scan_unmatched:
+    - script.execute: deny_feedback
+
+sensor:
+  - platform: fingerprint_grow
+    fingerprint_count:
+      name: Enrolled Fingerprints
+    last_finger_id:
+      name: Last Finger ID
+  - platform: wifi_signal
+    name: WiFi Signal
+    update_interval: 60s
+
+# ---------- Keypad (3x4 matrix) ----------
+matrix_keypad:
+  id: keypad
+  rows:
+    - pin: GPIO32
+    - pin: GPIO33
+    - pin: GPIO25
+    - pin: GPIO26
+  columns:
+    - pin: GPIO27
+    - pin: GPIO14
+    - pin: GPIO13
+  keys: "123456789*0#"
+
+key_collector:
+  - id: pin_entry
+    source_id: keypad
+    min_length: 4
+    max_length: 8
+    end_keys: "#"
+    clear_keys: "*"
+    allowed_keys: "0123456789"
+    timeout: 5s
+    on_result:
+      - if:
+          condition:
+            lambda: "return id(wrong_codes) >= ${max_wrong_codes};"
+          then:
+            - logger.log: "Keypad is locked out, ignoring code"
+            - script.execute: deny_feedback
+          else:
+            - if:
+                condition:
+                  lambda: 'return x == "${door_pin}";'
+                then:
+                  - globals.set:
+                      id: wrong_codes
+                      value: "0"
+                  - lock.unlock: door_lock
+                else:
+                  - lambda: "id(wrong_codes) += 1;"
+                  - script.execute: deny_feedback
+                  - if:
+                      condition:
+                        lambda: "return id(wrong_codes) >= ${max_wrong_codes};"
+                      then:
+                        - script.execute: keypad_lockout

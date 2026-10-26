@@ -1,0 +1,96 @@
+# Kitchen cabinet lighting: CCT (warm↔cool white) LED strip + door sensor + mmWave presence.
+# This is also the prototype for the "smart cabinet" product. See docs/wiring.md §1.
+
+substitutions:
+  device_name: kitchen-cabinet-lights
+  friendly_name: Kitchen Cabinet Lights
+  door_off_delay: 2min # light stays on this long after the cabinet door closes, unless someone is there
+
+packages:
+  base: !include common/base.yaml
+
+# Two low-side MOSFET channels. ~19.5 kHz PWM is above hearing (no coil whine) and doesn't flicker on camera.
+output:
+  - platform: ledc
+    pin: GPIO25
+    id: warm_white_ch
+    frequency: 19531Hz
+  - platform: ledc
+    pin: GPIO26
+    id: cool_white_ch
+    frequency: 19531Hz
+
+light:
+  - platform: cwww
+    id: cabinet_light
+    name: Cabinet Light
+    warm_white: warm_white_ch
+    cold_white: cool_white_ch
+    warm_white_color_temperature: 2700 K
+    cold_white_color_temperature: 6500 K
+    constant_brightness: true # keeps total LED current (and PSU load) constant while changing color temperature
+    default_transition_length: 0.6s
+    restore_mode: RESTORE_DEFAULT_OFF
+
+# HLK-LD2410C mmWave presence sensor (UART). Detects people standing still, unlike PIR.
+uart:
+  id: ld2410_uart
+  rx_pin: GPIO16 # to LD2410 TX
+  tx_pin: GPIO17 # to LD2410 RX
+  baud_rate: 256000
+  parity: NONE
+  stop_bits: 1
+
+ld2410:
+  uart_id: ld2410_uart
+
+binary_sensor:
+  - platform: ld2410
+    has_target:
+      id: presence
+      name: Presence
+
+  # Reed switch on the cabinet door (magnet on the door). Open → light on immediately, handled on the device.
+  - platform: gpio
+    id: cabinet_door
+    name: Cabinet Door
+    device_class: door
+    pin:
+      number: GPIO27
+      mode: INPUT_PULLUP
+    filters:
+      - delayed_on_off: 50ms
+    on_press: # door opened (switch released → pulled high)
+      - script.stop: auto_off
+      - light.turn_on:
+          id: cabinet_light
+          brightness: 100%
+    on_release: # door closed
+      - script.execute: auto_off
+
+  # Local wall/touch button: works with no Wi-Fi or hub
+  - platform: gpio
+    name: Cabinet Button
+    pin:
+      number: GPIO32
+      mode: INPUT_PULLUP
+      inverted: true
+    filters:
+      - delayed_on: 30ms
+    on_press:
+      - light.toggle: cabinet_light
+
+script:
+  - id: auto_off
+    mode: restart
+    then:
+      - delay: ${door_off_delay}
+      - wait_until:
+          condition:
+            binary_sensor.is_off: presence
+      - light.turn_off: cabinet_light
+
+sensor:
+  - platform: wifi_signal
+    name: WiFi Signal
+    update_interval: 60s

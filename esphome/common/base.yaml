@@ -1,0 +1,35 @@
+# Shared setup that every device needs: board, Wi-Fi, logs, and updates over Wi-Fi.
+# Each device pulls this in with `packages:` and only sets device_name and friendly_name.
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32dev # classic ESP32 DevKit. Change this if your board is different (e.g. esp32-c3-devkitm-1)
+  framework:
+    type: esp-idf
+
+# Prints what the device is doing (Wi-Fi status, sensor readings) to the USB/Wi-Fi log
+logger:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  # If your Wi-Fi can't be reached, the ESP32 creates its own hotspot so you can fix the settings
+  ap:
+    ssid: ${friendly_name} Setup
+    password: !secret fallback_ap_password
+
+captive_portal:
+
+# Encrypted link to Home Assistant (the hub). This is how the phone app and the touch panel reach the device.
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+# Firmware updates over Wi-Fi, encrypted with the same key as the API (ESPHome requires them to match).
+ota:
+  - platform: esphome
+
+# No web_server here on purpose: it adds an unauthenticated firmware-upload endpoint.
